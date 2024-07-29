@@ -22,73 +22,71 @@ def sig(x):
 def Snu(T, nu, grid):
     exp_arg = np.einsum("ij,k->ijk", T**-1, HP*nu/KB)
     denom = np.exp(exp_arg) -1
-    num = 2*HP/c/c*np.einsum("j,k->jk", 2*np.pi*grid.ro_cell, nu**3)*grid.dr
+    num = 2*HP/c/c*np.einsum("j,k->jk", 2*np.pi*grid.r_cell*grid.dr, nu**3)
     integrand = np.einsum("jk,ijk->ijk", num, denom**-1)
     integrand = np.where(exp_arg > 1000, 0, integrand)
-    integrand = np.where(exp_arg < 1/1000, 2*KB/c/c*np.einsum("k,ij->ijk", nu**2, T*grid.ro_cell)*2*np.pi*grid.dr, integrand) ## rayleigh jeans
+    integrand = np.where(exp_arg < 1/1000, 2*KB/c/c*np.einsum("k,ij->ijk", nu**2, T*grid.r_cell*2*np.pi*grid.dr), integrand) ## rayleigh jeans
     return np.sum(integrand, axis=1)/(4*np.pi*(10*PC)**2)
 
 
 class Grid:
-    def __init__(self, ri=None, rf=None, nt=None, geometry="CYLINDRICAL", grid_array=None, params=Params(MBH=1e6*MSUN)):
+    def __init__(self, ri=None, rf=None, nt=None, grid_array=None, params=Params(MBH=1e6*MSUN, GEOMETRY="LINEAR")):
+        self.params = params
         if grid_array is not None:
-            self.ro_cell = np.array(grid_array)
-        else:
+            self.r_cell = np.array(grid_array)
+            nt = len(self.r_cell)-2
+            ri, rf = self.r_cell[1], self.r_cell[-2]
+
+        ## TODO: figure out wtf to do with the different drs and other crap
+        self.n = nt
+        ## define cell centers and cell inter_faces and stuff
+        if params.GEOMETRY.__eq__("LOGARITHMIC"):
+            drlog = np.log10(rf/ri)/(nt-1)
+            logi, logf = np.log10(ri), np.log10(rf)
+            self.r_cell = np.logspace(logi - drlog, logf + drlog, nt + 2)
+            self.r_face = np.logspace(logi - 3*drlog/2, logf + 3*drlog/2, nt + 3)
+            self.dr = self.r_face[1:] - self.r_face[:-1]
+            self.ddr = self.r_face[1:-1]*np.log(10)*drlog  ## specifically for derivatives
+
+        elif params.GEOMETRY.__eq__("LINEAR"):
+            print("pooopy")
             dr = (rf - ri) / (nt - 1)
-            self.ro_cell = np.linspace(ri - dr, rf + dr, nt + 2)
+            self.r_cell = np.linspace(ri - dr, rf + dr, nt + 2)
+            self.r_face = np.linspace(ri - 3*dr/2, rf + 3*dr/2, nt + 3)
+            self.dr = dr
+            self.ddr = dr
 
-        nt = len(self.ro_cell)-2
+        self.omgko = np.sqrt(CONST_G*params.MBH/self.r_cell**3)
+        self.vk2 = CONST_G*params.MBH/self.r_cell
+        self.cell_vol = np.pi*(self.r_face[1:]**2 - self.r_face[:-1]**-2)
+        self.r_face = self.r_face[1:-1]
+        self.face_area = np.pi*self.r_face
 
-        ri = self.ro_cell[1]
-        rf = self.ro_cell[-2]
-        dr = self.ro_cell[1] - self.ro_cell[0]
-        self.dr = dr
-        self.omgko = np.sqrt(CONST_G*params.MBH/self.ro_cell**3)
-        self.vk2 = CONST_G*params.MBH/self.ro_cell
-        self.ro_face = np.linspace(ri - dr / 2, rf + dr / 2, nt + 1)
+    def save(self):
+        with open(os.path.join(os.getcwd(), self.params.SIM_NAME+"/grid_data.dat")) as f:
+            f.write(arr_to_string(self.r_cell))
+            f.write(arr_to_string(self.r_face))
+    def cell_zeros(self):
+        return np.zeros(self.n+2)
+    def face_zeros(self):
+        return np.zeros(self.n+1)
 
-        if geometry.__eq__("CARTESIAN"):
-            def tmp_vcell(r_int):
-                vol = np.zeros(self.ro_cell.shape)
-                vol[1:-1] = r_int[1:] - r_int[:-1]
-                vol[0] = vol[1]
-                vol[-1] = vol[-2]
-                return vol
-            self.vol_cell = tmp_vcell
-            self.area_face = lambda ro_int, rn_int: np.ones(nt + 3)
-            self.alpha = 1
-        elif geometry.__eq__("CYLINDRICAL"):
-            def tmp_vcell(r_int):
-                vol = np.zeros(self.ro_cell.shape)
-                vol[1:-1] = np.pi * (r_int[1:] ** 2 - r_int[:-1] ** 2)
-                vol[0] = vol[1]
-                vol[-1] = vol[-2]
-                return vol
-            self.vol_cell = tmp_vcell
-            self.area_face = lambda ro_int, rn_int: np.pi * (ro_int + rn_int)
-            self.alpha = 2
-        elif geometry.__eq__("SPHERICAL"):
-            def tmp_vcell(r_int):
-                vol = np.zeros(self.ro_cell.shape)
-                vol[1:-1] = (4 / 3) * np.pi * (r_int[1:] ** 3 - r_int[:-1] ** 3)
-                vol[0] = vol[1]
-                vol[-1] = vol[-2]
-                return vol
-            self.vol_cell = tmp_vcell
-            self.area_face = lambda ro_int, rn_int: (4 / 3) * np.pi * (ro_int ** 2 + ro_int * rn_int + rn_int ** 2)
-            self.alpha = 3
+
+
+
 
 class ShastaVariable:
     def __init__(self, grid, data, vf, D):
         self.grid = grid  ## should contain only
         self.data = data  ## contains only interior grid points
-        self.vf = vf ## at the interior interfaces
+        self.vf = vf ## at the interior inter_faces
         self.D = D
 
 class FullVariable:
     def __init__(self, params):
         self.eos = load_table(params.EOS_TABLE)
-        self.grid = Grid(params.R0, params.RF, params.NR)
+        self.params=params
+        self.grid = Grid(params.R0, params.RF, params.NR, params=params)
         self.be_crit = params.BE_CRIT
         self.dbe = params.DBE
         self.fbk = params.FBK
@@ -115,25 +113,26 @@ class FullVariable:
         self.nu = self.alpha*self.H**2*self.grid.omgko
 
         self.sigv = sig((self.be-self.be_crit)/self.dbe)
-        ## calculates velocities at interfaces
-        lc_sigma = 2 * np.pi * self.sigma * self.grid.ro_cell
-        g = np.sqrt(self.grid.ro_cell) / (self.nu+1e-20)
+        ## calculates velocities at inter_faces
+        lc_sigma = 2 * np.pi * self.sigma * self.grid.r_cell
+        g = np.sqrt(self.grid.r_cell) / (self.nu+1e-20)
         d = 3*self.nu
-        dr = self.grid.ro_cell[1] - self.grid.ro_cell[0]
+        dr = self.grid.r_cell[1] - self.grid.r_cell[0]
 
-        lc_sigma_tild = np.interp(self.grid.ro_face, self.grid.ro_cell, lc_sigma)
-        g_tild = np.interp(self.grid.ro_face, self.grid.ro_cell, g)
-        d_tild = np.interp(self.grid.ro_face, self.grid.ro_cell, d)
+        lc_sigma_tild = np.interp(self.grid.r_face, self.grid.r_cell, lc_sigma)
+        g_tild = np.interp(self.grid.r_face, self.grid.r_cell, g)
+        d_tild = np.interp(self.grid.r_face, self.grid.r_cell, d)
 
-        self.vr = -d_tild*g_tild/lc_sigma_tild/dr*(lc_sigma[1:]/g[1:] - lc_sigma[:-1]/g[:-1])
+        self.vr = 0
+        self.vr = -d_tild * g_tild / lc_sigma_tild / (lc_sigma[1:] / g[1:] - lc_sigma[:-1] / g[:-1])/self.grid.ddr
 
         ## calculate source terms for density
         sigma_wl = self.sigma*self.grid.omgko*self.sigv ## wind loss
 
         sigma_fb= 1/np.pi/gamma(self.fbk/2+1)/self.fbr0**2   ## fall back
-        sigma_fb *= (t + MONTH)**(-5/3)*(self.grid.ro_cell/self.fbr0)**self.fbk
-        sigma_fb *= np.exp(-(self.grid.ro_cell/self.fbr0)**2)
-        sigma_fb *= MSUN*MONTH**(2/3)
+        sigma_fb *= (t + self.params.TFB)**(-5/3)*(self.grid.r_cell/self.fbr0)**self.fbk
+        sigma_fb *= np.exp(-(self.grid.r_cell/self.fbr0)**2)
+        sigma_fb *= self.params.TFB**(5/3)*self.params.MDOT
 
         self.sigma_dot = sigma_fb - sigma_wl
 
@@ -155,76 +154,63 @@ class FullVariable:
     def ts_var(self):
         return ShastaVariable(self.grid, self.ts, self.vr, self.ts_dot)
 
-def shasta_step(var, vg, dt):
+def shasta_step(var, vf, dt):
 
-    rn_face = var.grid.ro_face + vg*dt
-    rn_cell = np.copy(var.grid.ro_cell)
-    rn_cell[1:-1] = 0.5*(rn_face[1:] + rn_face[:-1])
-    rn_cell[0] += rn_cell[1] - var.grid.ro_cell[1]
-    rn_cell[-1] += rn_cell[-2] - var.grid.ro_cell[-2]
-    dv_face = var.vf - vg
-    data_face = 0.5*(var.data[1:] + var.data[:-1])
+    ## add different interpolation options
+    var_face = np.interp(var.grid.r_face, var.grid.r_cell, var.data)
+    vol_face = np.interp(var.grid.r_face, var.grid.r_cell, var.grid.cell_vol)  ## volume at face
 
     ## convective update
-    vol0 = var.grid.vol_cell(var.grid.ro_face)
-    area = var.grid.area_face(var.grid.ro_face, rn_face)
-    var_ast = np.zeros(var.grid.ro_cell.shape)
-    var_ast[1:-1] = (var.data[1:-1] - dt*data_face[1:]*area[1:]*dv_face[1:]/vol0[1:-1]
-               + dt*data_face[:-1]*area[:-1]*dv_face[:-1]/vol0[1:-1])
+    var_ast = var.grid.cell_zeros()
+    var_ast[1:-1] = var.data[1:-1]
+    var_ast[1:-1] += (-dt*var.grid.face_area[1:]*vf[1:]*var_face[1:]+dt*var.grid.face_area[:-1]*vf[:-1]*var_face[:-1])/var.grid.cell_vol[1:-1]
+
     var_ast[0] = var_ast[1]
     var_ast[-1] = var_ast[-2]
 
     ## transport update
-    var_T = np.zeros(var.grid.ro_cell.shape)
-    var_T[1:-1] = var_ast[1:-1] + dt*var.D[1:-1]
+    var_T = var.grid.cell_zeros()
+    var_T[1:-1] = var_ast[1:-1] + dt * var.D[1:-1]
+
     var_T[0] = var_T[1]
     var_T[-1] = var_T[-2]
 
+    ## diffusive variables
+    eps_face = 0.5*var.grid.face_area*vf*dt*(1/var.grid.cell_vol[:-1] + 1/var.grid.cell_vol[1:])
+    nu_face = 1/6 + 1/3*eps_face**2
+    mu_face = 1/6 - 1/6*eps_face**2
+
+
     ## diffusive update
-    voln = var.grid.vol_cell(rn_face)
-    volh = 0.5*(voln[1:] + voln[:-1])
-    #volh[0] = voln[1]
-    #volh[-1] = voln[-2]
+    var_tild = var.grid.cell_zeros()
+    var_tild[1:-1] = var_T[1:-1]
+    var_tild[1:-1] += (nu_face[1:]*vol_face[1:]*(var.data[2:]-var.data[1:-1]) -
+                       nu_face[:-1]*vol_face[:-1]*(var.data[1:-1] - var.data[:-2]))/var.grid.cell_vol[1:-1]
 
-    eps = 0.5*area*dv_face*dt*(1/voln[:-1] + 1/voln[1:])
-    nu = 1/6+1/3*eps**2
-    mu = 1*(1/6-1/6*eps**2)
+    var_tild[0] = var_tild[1]
+    var_tild[-1] = var_tild[-2]
 
-    var_tild = np.zeros(var.grid.ro_cell.shape)
+    ## flux correction
+    sign_face = np.sign(var_tild[1:] - var_tild[:-1])
+    fad_face = mu_face*vol_face*(var_T[1:] - var_T[:-1])
 
-    var_tild[1:-1] = (vol0[1:-1]*var_T[1:-1] + nu[1:]*volh[1:]*(var.data[2:] - var.data[1:-1])
-                - nu[:-1]*volh[:-1]*(var.data[1:-1] - var.data[:-2]))
+    flux_face = var.grid.face_zeros()
+    flux_left = sign_face[:-1]*var.grid.cell_vol[1:-1]*(var_tild[2:] - var_tild[1:-1])
+    flux_right = sign_face[1:]*var.grid.cell_vol[1:-1]*(var_tild[1:-1] - var_tild[:-2])
+    diff_face = np.minimum(flux_left[1:], flux_right[:-1])
+    flux_face[1:-1] = sign_face[1:-1]*np.maximum(0, np.minimum(np.abs(fad_face[1:-1]), diff_face))
+    flux_face[0] = sign_face[0]*np.maximum(0, np.minimum(np.abs(fad_face[0]), flux_left[0]))
+    flux_face[-1] = sign_face[-1]*np.maximum(0, np.minimum(np.abs(fad_face[-1]), flux_right[-1]))
 
-    var_tild[1:-1] /= voln[1:-1]
-    var_tild[0] = var_tild[1]; var_tild[-1] = var_tild[-2]
-
-    ## diffusive correction
-    shalf = np.sign(var_tild[1:] - var_tild[:-1])
-    fadd = mu*volh*(var_T[1:]-var_T[:-1])
-
-    fluxc = np.zeros(var.grid.ro_face.shape)
-    fluxc[1:-1] = shalf[1:-1]*np.maximum(0,
-                             np.minimum(np.abs(fadd[1:-1]),
-                                        np.minimum(shalf[1:-1]*voln[2:-1]*(var_tild[3:]-var_tild[2:-1]),
-                                                   shalf[1:-1]*voln[1:-2]*(var_tild[1:-2]-var_tild[:-3])))
-                             )
-
-    fluxc[0] = shalf[0]*np.maximum(0, np.minimum(np.abs(fadd[0]), shalf[0]*voln[1]*(var_tild[2]-var_tild[1])))
-    fluxc[-1] = shalf[-1]*np.maximum(0, np.minimum(np.abs(fadd[-1]), shalf[-1]*voln[-2]*(var_tild[-2]-var_tild[-3])))
-
-    var_ret = np.zeros(var.grid.ro_cell.shape)
-    var_ret[1:-1] = var_tild[1:-1] - voln[1:-1]**-1*(fluxc[1:] - fluxc[:-1])
-    var_ret[0] = var_ret[1]
-    var_ret[-1] = var_ret[-2]
-
-    var_ret = np.interp(var.grid.ro_cell, rn_cell, var_ret)
+    var_ret = np.zeros(var.grid.r_cell.shape)
+    var_ret[1:-1] = var_tild[1:-1] - var.grid.cell_vol[1:-1]**-1*(flux_face[1:] - flux_face[:-1])
     var_ret[0] = var_ret[1]
     var_ret[-1] = var_ret[-2]
 
     return var_ret
 
 
-## input as surface density, entropy per mass
+## input as sur_face density, entropy per mass
 class Simulation:
     def __init__(self, sigma0, entropy0, params=Params()):
 
@@ -251,8 +237,8 @@ class Simulation:
         if self.restart:
             sigma0 = np.load(os.path.join(self.sim_dir, "sigma.npy"), mmap_mode="r")[-1]
             entropy0 = np.load(os.path.join(self.sim_dir, "entropy.npy"), mmap_mode="r")[-1]
-            ro_cell = np.load(os.path.join(self.sim_dir, "rocell.npy"), mmap_mode="r")
-            self.grid = Grid(grid_array=ro_cell)
+            r_cell = np.load(os.path.join(self.sim_dir, "rocell.npy"), mmap_mode="r")
+            self.grid = Grid(grid_array=r_cell)
             tarr = np.load(os.path.join(self.sim_dir, "tsave.npy"), mmap_mode="r")
             self.t0, self.t = tarr[0], tarr[-1]
             self.file_start = np.arange(self.t, self.tf, self.file_int)
@@ -267,17 +253,17 @@ class Simulation:
             for f in old_dat:
                 os.remove(f)
 
-            self.grid = Grid(params.R0, params.RF, params.NR)
+            self.grid = Grid(params.R0, params.RF, params.NR, params=params)
             self.t0 = params.T0
             self.t = params.T0
 
 
             sigmafile = open(self.sigmafd, "w")
-            sigmafile.write(arr_to_string(self.grid.ro_cell) + arr_to_string(sigma0, t=self.t))
+            sigmafile.write(arr_to_string(self.grid.r_cell) + arr_to_string(sigma0, t=self.t))
             sigmafile.close()
 
             sfile = open(self.entropyfd, "w")
-            sfile.write(arr_to_string(self.grid.ro_cell) + arr_to_string(entropy0, t=self.t))
+            sfile.write(arr_to_string(self.grid.r_cell) + arr_to_string(entropy0, t=self.t))
             sfile.close()
 
             self.file_start = np.arange(self.t0, self.tf, self.file_int)
@@ -294,14 +280,21 @@ class Simulation:
         self.vhalf = FullVariable(params)
 
     def take_step(self, mult=1.0):
-        dr = self.grid.dr/2
-        ts_arr = self.sfdt*np.abs(self.var0.ts/(self.var0.ts_dot+1e-50))
-        ts_loc = np.argmin(ts_arr)
-        ts_dt = ts_arr[ts_loc]
+        dr = 0
+        if self.params.GEOMETRY.__eq__("LOGARITHMIC"):
+            dr_left = self.grid.r_face - self.grid.r_cell[:-1]
+            dr_right = self.grid.r_cell[1:] - self.grid.r_face
+            dr = np.where(self.var0.vr < 0, dr_left, dr_right)
+        elif self.params.GEOMETRY.__eq__("LINEAR"):
+            dr = self.grid.dr / 2
 
-        sigma_arr = self.sfdt*np.abs(self.var0.sigma/(self.var0.sigma_dot+1e-50))
+        ts_arr = (self.sfdt*np.abs(self.var0.ts/(self.var0.ts_dot+1e-50)))[1:-1]
+        ts_loc = np.argmin(ts_arr)
+        ts_dt = ts_arr[ts_loc+1]
+
+        sigma_arr = (self.sfdt*np.abs(self.var0.sigma/(self.var0.sigma_dot+1e-50)))[1:-1]
         sigma_loc = np.argmin(sigma_arr)
-        sigma_dt = sigma_arr[sigma_loc]
+        sigma_dt = sigma_arr[sigma_loc+1]
 
         cfl_arr = self.cfl*np.abs(dr/(self.var0.vr+1e-50))
         cfl_loc = np.argmin(cfl_arr)
@@ -313,22 +306,24 @@ class Simulation:
         arr = np.array([ts_dt, sigma_dt, cfl_dt])
         st = ["s", "sigma", "cfl"][np.argmin(arr)]
         loc = [ts_loc, sigma_loc, cfl_loc][np.argmin(arr)]
-        loc = self.grid.ro_cell[loc]/self.grid.ro_cell[0]
+        loc = self.grid.r_cell[loc]/self.grid.r_cell[0]
 
 
         ## start adapative time stepping
 
         ## take half step
-        sigma = self.var0.sigma_var()
-        ts = self.var0.ts_var()
-        vr = np.copy(self.var0.vr)
         n=0
         ts_full = []
         sigma_full = []
         max_ts_err = np.inf
         max_sigma_err = np.inf
 
+        vr = np.copy(self.var0.vr)
+
         while True:
+            sigma = self.var0.sigma_var()
+            ts = self.var0.ts_var()
+
             ts_full_o1 = shasta_step(ts, vr, self.dt)
             sigma_full_o1 = shasta_step(sigma, vr, self.dt)
 
@@ -384,11 +379,11 @@ class Simulation:
                 self.entropyfd = os.path.join(os.getcwd(), self.sim_name + f"/entropy.{n:03d}.dat")
 
                 sigmafile = open(self.sigmafd, "w")
-                sigmafile.write(arr_to_string(self.grid.ro_cell)) ## write grid locations
+                sigmafile.write(arr_to_string(self.grid.r_cell)) ## write grid locations
                 sigmafile.close()
 
                 sfile = open(self.entropyfd, "w")
-                sfile.write(arr_to_string(self.grid.ro_cell))
+                sfile.write(arr_to_string(self.grid.r_cell))
                 sfile.close()
 
                 sigmafile = open(self.sigmafd, "a")

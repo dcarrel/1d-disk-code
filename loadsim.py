@@ -22,7 +22,7 @@ class LoadSimulation:
         self.sigma = np.load(os.path.join(self.sim_dir, "sigma.npy"), mmap_mode="r")[indices]
         self.s = np.load(os.path.join(self.sim_dir, "entropy.npy"), mmap_mode="r")[indices]
         self.ts = self.ts[indices]
-        self.grid = Grid(grid_array=np.load(os.path.join(self.sim_dir, "rocell.npy")))
+        self.grid = Grid(grid_array=np.load(os.path.join(self.sim_dir, "rocell.npy")), params=params)
         self.eos = load_table(params.EOS_TABLE)
 
         self.chi = self.sigma*self.grid.omgko
@@ -35,7 +35,7 @@ class LoadSimulation:
         self.P = self.rad_P + self.gas_P
         self.U = RADA * self.T ** 4 + 1.5 * self.rho * KB * self.T / mu
 
-        self.be = -1 + 2 * (self.U + self.P) / self.rho * self.grid.ro_cell / CONST_G / MBH
+        self.be = -1 + 2 * (self.U + self.P) / self.rho * self.grid.r_cell / CONST_G / MBH
         self.H = self.sigma / 2 / self.rho
         self.nu = params.ALPHA * self.H ** 2 * self.grid.omgko
 
@@ -45,11 +45,11 @@ class LoadSimulation:
         self.nuL_nu = np.einsum("j,ij->ij", self.nuf, self.L_nu)
 
         self.sigv = sig((self.be - params.BE_CRIT) / params.DBE)
-        ## calculates velocities at interfaces
-        lc_sigma = 2 * np.pi * self.sigma * self.grid.ro_cell
-        g = np.sqrt(self.grid.ro_cell) / (self.nu + 1e-20)
+        ## calculates velocities at inter_faces
+        lc_sigma = 2 * np.pi * self.sigma * self.grid.r_cell
+        g = np.sqrt(self.grid.r_cell) / (self.nu + 1e-20)
         d = 3 * self.nu
-        dr = self.grid.ro_cell[1] - self.grid.ro_cell[0]
+        dr = self.grid.r_cell[1] - self.grid.r_cell[0]
 
         g_tild = (g[:, 1:] + g[:, :-1])/2
         d_tild = (d[:, 1:] + d[:,:-1])/2
@@ -60,7 +60,7 @@ class LoadSimulation:
         sigma_wl = params.FWIND*self.sigma * self.grid.omgko * self.sigv  ## wind loss
 
         sigma_fb = 1 / np.pi / gamma(params.FBK / 2 + 1) / params.FBR0 ** 2  ## fall back
-        sigma_fb *= np.einsum("i,j->ij", (self.ts + MONTH) ** (-5 / 3), (self.grid.ro_cell / params.FBR0) ** params.FBK * np.exp(-(self.grid.ro_cell / params.FBR0) ** 2))
+        sigma_fb *= np.einsum("i,j->ij", (self.ts + MONTH) ** (-5 / 3), (self.grid.r_cell / params.FBR0) ** params.FBK * np.exp(-(self.grid.r_cell / params.FBR0) ** 2))
         sigma_fb *= MSUN * MONTH ** (2 / 3)
 
         self.sigma_fb = sigma_fb
@@ -72,9 +72,9 @@ class LoadSimulation:
         self.kappa = kappa
 
         qrad = 4 * RADA * self.T ** 4 * c / (1 + kappa * self.sigma)/self.sigma
-        qwind = 0.5 * self.grid.omgko * CONST_G * MBH / self.grid.ro_cell * self.sigv
+        qwind = 0.5 * self.grid.omgko * CONST_G * MBH / self.grid.r_cell * self.sigv
         qvis = 2.25 * self.nu * self.grid.omgko ** 2
-        qfb = params.FSH*0.5*CONST_G * MBH * sigma_fb / self.grid.ro_cell /self.sigma
+        qfb = params.FSH*0.5*CONST_G * MBH * sigma_fb / self.grid.r_cell /self.sigma
 
 
         self.qvis = qvis/self.sigma

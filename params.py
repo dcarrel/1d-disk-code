@@ -12,7 +12,7 @@ class Params:
                  BE_CRIT=-0.1, DBE=1/300, FWIND=0.5,
                  FBK=-3/2, FBR0=1e13, FSH=0.5,
                  ALPHA=0.05, TOL=1e-2, MAXIT=1000, DIFF=1., load=None,
-                 EOS_TABLE="EOS_TABLE"
+                 EOS_TABLE="EOS_TABLE", GEOMETRY="LINEAR", MDOT=MSUN/MONTH, TFB=MONTH
                  ):
         
         if load is None:
@@ -41,7 +41,10 @@ class Params:
                            "TOL": TOL,
                            "MAXIT": MAXIT,
                            "DIFF": DIFF,
-                           "EOS_TABLE": EOS_TABLE
+                           "EOS_TABLE": EOS_TABLE,
+                           "GEOMETRY": GEOMETRY,
+                           "MDOT":MDOT,
+                           "TFB": TFB
             }
         else:
             with open(os.path.join(os.getcwd(), load+"/params.json")) as f:
@@ -83,6 +86,9 @@ class Params:
         self.MAXIT = self._pdict["MAXIT"]
         self.DIFF = self._pdict["DIFF"]
         self.EOS_TABLE = self._pdict["EOS_TABLE"]
+        self.GEOMETRY = self._pdict["GEOMETRY"]
+        self.MDOT = self._pdict["MDOT"]
+        self.TFB = self._pdict["TFB"]
 
     def save(self, file_name=None):
         if file_name is None: file_name = "params.json"
