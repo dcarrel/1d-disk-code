@@ -3,7 +3,13 @@ from scipy.interpolate import RectBivariateSpline
 from scipy.optimize import fsolve
 import pandas as pd
 from consts import *
-from setup import *
+
+XH   = 0.7
+XHe  = 0.3
+mu   = XH*MP + 4*XHe*MP
+Xi = np.array([XH, XH, XHe])
+mi = np.array([MP, ME, 4*MP])
+Xi_over_mi = Xi/np.array([MP, MP, 4*MP])
 
 ## returns temperature, density
 def rad_temp(chi, entropy):
