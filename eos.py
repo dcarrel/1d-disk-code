@@ -107,7 +107,7 @@ def make_table(chi, entropy, table_name="EOS_TABLE", xtol=1e-6):
     return temperature_table
 
 
-def load_table(table_name):
+def load_table(table_name, retvars=False):
     df = pd.read_csv(table_name, index_col=0)
     log_entropy = np.array(df.index.values, dtype=np.float64)
     log_chi = np.array(df.columns, dtype=np.float64)
@@ -144,6 +144,9 @@ def load_table(table_name):
         values += np.minimum(ulog_entropy - entropy_m, 0) * np.interp(ulog_chi, log_chi, entropy_m_slopes)
 
         return np.power(10, values)
+
+    if retvars:
+        return (np.power(10, log_chi), np.power(10, log_entropy), EOS)
 
     return EOS
 

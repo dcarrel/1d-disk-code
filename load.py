@@ -4,9 +4,9 @@ from eos import *
 from consts import *
 
 def vector_interp(r_face, r_cell, v_cell):
-    v_cell = v_cell[:,:-1]
-    v_cell += (v_cell[:,1:] - v_cell[:,:-1])/()*(r_face - r_cell[:-1])
-    return v_cell
+    v_face = v_cell[:,:-1]
+    v_face += (v_cell[:,1:] - v_cell[:,:-1])/(r_cell[1:]-r_cell[:-1])*(r_face - r_cell[:-1])
+    return v_face
 
 class LoadSimulation:
     def __init__(self, t0=None, tf=None, dt=0.1*YEAR, mode="CONST", tend=3*MONTH, dts=10*DAY, tstart=10*DAY, params=Params()):
@@ -100,7 +100,7 @@ class LoadSimulation:
 
         sigma_fb = 1/np.pi/gamma(params.FBK/2+1)/params.FBR0**2
         sigma_fb *= (self.grid.r_cell/params.FBR0)**params.FBK*np.exp(-(self.grid.r_cell/params.FBR0)**2)
-        time_part = np.where(self.ts > params.TFB, (params.TFB/self.ts)**(5/3), params.MSTAR/5/params.TFB)
+        time_part = np.where(self.ts > params.TFB, (params.TFB/(self.ts+1e-20))**(5/3), params.MSTAR/5/params.TFB)
         sigma_fb = np.einsum("i,j->ij", time_part, sigma_fb)
         if not params.FB_ON: sigma_fb *= 0
 

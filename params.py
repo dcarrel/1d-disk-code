@@ -37,11 +37,10 @@ class Params:
                  CONST_NU=None,         ## Set to test against analytic solution. Does not evolve entropy
                  EVOLVE_SIGMA=True,     ## If false, fixes sigma profile
                  EVOLVE_ENTROPY=True,    ## If false, fixes entropy profile
-                 SAVE=True
+                 SAVE=True,
+                 MAXTIME=None ## cancels after a certain amount of time
                  ):
-        
-        if load is None:
-            self._pdict = {"MBH": MBH,
+        self._pdict = {"MBH": MBH,
                            "R0": R0,
                            "RF": RF,
                            "NR": NR,
@@ -73,14 +72,23 @@ class Params:
                            "CONST_NU": CONST_NU,
                            "EVOLVE_ENTROPY": EVOLVE_ENTROPY,
                            "EVOLVE_SIGMA": EVOLVE_SIGMA,
-                           "SAVE": SAVE
+                           "SAVE": SAVE,
+                           "MAXTIME": MAXTIME
             }
-        else:
+
+        if load is not None:
+            new_dict = []
+
+            ## loads in dictionary
             if isinstance(load, dict):
-                self._pdict = load.copy()
-            elif isinstance(load, str):
+                new_dict = load.copy()
+            if isinstance(load, str):
                 with open(os.path.join(os.getcwd(), load+"/params.json")) as f:
-                    self._pdict = json.load(f)
+                    new_dict = json.load(f)
+
+            for key, val in new_dict.items():
+                if key in self._pdict:
+                    self._pdict[key] = val
         ## writes param file
 
         
@@ -95,9 +103,10 @@ class Params:
         self.TF = self._pdict["TF"]
         self.TS = self._pdict["TS"]
 
-        self.SIM_DIR = "runs/"+self._pdict["SIM_DIR"]
-        if not os.path.exists(os.path.join(os.getcwd(), "runs")):
-            os.mkdir(os.path.join(os.getcwd(), "runs"))
+        self.SIM_DIR = self._pdict["SIM_DIR"]
+        if not os.path.exists(self.SIM_DIR):
+            os.makedirs(self.SIM_DIR)
+
         self.FILE_INT = self._pdict["FILE_INT"]
         self.RESTART = self._pdict["RESTART"]
 
@@ -131,6 +140,7 @@ class Params:
 
         self.EVOLVE_SIGMA = self._pdict["EVOLVE_SIGMA"]
         self.SAVE = self._pdict["SAVE"]
+        self.MAXTIME = self._pdict["MAXTIME"]
 
         ## c+p from https://dergipark.org.tr/en/download/article-file/1612778
         def stellar_radius(m):

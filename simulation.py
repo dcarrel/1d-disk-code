@@ -9,7 +9,7 @@ class Simulation:
     def __init__(self, sigma0, entropy0, params=Params()):
         ## sets up simulation directory
         if not os.path.isdir(os.path.join(os.getcwd(), params.SIM_DIR)):
-            os.mkdir(os.path.join(os.getcwd(), params.SIM_DIR))
+            os.makedirs(os.path.join(os.getcwd(), params.SIM_DIR))
 
         self.sim_dir = os.path.join(os.getcwd(), params.SIM_DIR)
         self.params=params
@@ -34,6 +34,7 @@ class Simulation:
             self.file_start[0] = 3 * self.params.TF
 
             if self.params.SAVE:
+                self.params.save()
                 old_dat = glob.glob(os.path.join(self.sim_dir, "*.dat"))
                 for f in old_dat:
                     os.remove(f)
@@ -94,12 +95,12 @@ class Simulation:
             ts = self.var0.ts_var()
 
             ts_full_o1, sigma_full_o1 = ts.data, sigma.data
-            if self.params.EVOLVE_ENTROPY: ts_full_o1 = shasta_step(ts, vr, self.dt, interp=self.params.INTERP)
-            if self.params.EVOLVE_SIGMA: sigma_full_o1 = shasta_step(sigma, vr, self.dt, interp=self.params.INTERP)
+            if self.params.EVOLVE_ENTROPY: ts_full_o1 = shasta_step(ts, vr, self.dt, interp=self.params.INTERP, diff=self.params.DIFF)
+            if self.params.EVOLVE_SIGMA: sigma_full_o1 = shasta_step(sigma, vr, self.dt, interp=self.params.INTERP, diff=self.params.DIFF)
 
             ts_half, sigma_half = ts.data, sigma.data
-            if self.params.EVOLVE_ENTROPY: ts_half = shasta_step(ts, vr, self.dt/2, interp=self.params.INTERP)
-            if self.params.EVOLVE_SIGMA: sigma_half = shasta_step(sigma, vr, self.dt/2, interp=self.params.INTERP)
+            if self.params.EVOLVE_ENTROPY: ts_half = shasta_step(ts, vr, self.dt/2, interp=self.params.INTERP, diff=self.params.DIFF)
+            if self.params.EVOLVE_SIGMA: sigma_half = shasta_step(sigma, vr, self.dt/2, interp=self.params.INTERP, diff=self.params.DIFF)
             self.vhalf.update_variables(sigma_half, ts_half, t=self.t+self.dt/2)
 
             vf_half = np.copy(self.vhalf.vr)
@@ -107,8 +108,8 @@ class Simulation:
             ts.D = self.vhalf.ts_dot
 
             ts_full, sigma_full = ts.data, sigma.data
-            if self.params.EVOLVE_ENTROPY: ts_full = shasta_step(ts, vf_half, self.dt, interp=self.params.INTERP)
-            if self.params.EVOLVE_SIGMA: sigma_full = shasta_step(sigma, vf_half, self.dt, interp=self.params.INTERP)
+            if self.params.EVOLVE_ENTROPY: ts_full = shasta_step(ts, vf_half, self.dt, interp=self.params.INTERP, diff=self.params.DIFF)
+            if self.params.EVOLVE_SIGMA: sigma_full = shasta_step(sigma, vf_half, self.dt, interp=self.params.INTERP, diff=self.params.DIFF)
 
             ts_err = np.abs(ts_full_o1 - ts_full)/ts_full
             sigma_err = np.abs(sigma_full_o1 - sigma_full)/sigma_full
@@ -214,7 +215,7 @@ class Simulation:
             np.save(os.path.join(self.sim_dir, "entropy.npy"), entropy_array)
             np.save(os.path.join(self.sim_dir, "tsave.npy"), t_array)
 
-def shasta_step(var, vf, dt, interp="LINEAR"):
+def shasta_step(var, vf, dt, interp="LINEAR", diff=1):
     ## add different interpolation options at some point, probably will not really matter
     ## no reason to at the moment
     var_face, vol_face = [], []
@@ -243,6 +244,7 @@ def shasta_step(var, vf, dt, interp="LINEAR"):
     eps_face = 0.5*var.grid.face_area*vf*dt*(1/var.grid.cell_vol[:-1] + 1/var.grid.cell_vol[1:])
     nu_face = 1/6 + 1/3*eps_face**2
     mu_face = 1/6 - 1/6*eps_face**2
+    mu_face *= diff
 
 
     ## diffusive update
