@@ -34,11 +34,11 @@ fsh_ic = [main_p0, main_p0]
 
 ## Use same initial conditions as main_p0
 diff_p1 = Params(SIM_DIR="runs/aug04_diff01hr", MBH=1e6*MSUN, MSTAR=MSUN, ALPHA=0.01, R0=4, RF=1000, NR=NR, FSH=0.5,
-                 DIFF=0.98, FWIND=0.5, TF=2*YEAR, GEOMETRY="LOGARITHMIC", INTERP="LOGARITHMIC", TOL=5e-3)
-diff_p2 = Params(SIM_DIR="runs/aug04_diff02hr", MBH=1e6*MSUN, MSTAR=MSUN, ALPHA=0.01, R0=4, RF=1000, NR=NR, FSH=0.5,
                  DIFF=0.95, FWIND=0.5, TF=2*YEAR, GEOMETRY="LOGARITHMIC", INTERP="LOGARITHMIC", TOL=5e-3)
+diff_p2 = Params(SIM_DIR="runs/aug04_diff02hr", MBH=1e6*MSUN, MSTAR=MSUN, ALPHA=0.01, R0=4, RF=1000, NR=NR, FSH=0.5,
+                 DIFF=0.98, FWIND=0.5, TF=2*YEAR, GEOMETRY="LOGARITHMIC", INTERP="LOGARITHMIC", TOL=5e-3)
 diff_p3 = Params(SIM_DIR="runs/aug04_diff03hr", MBH=1e6*MSUN, MSTAR=MSUN, ALPHA=0.01, R0=4, RF=1000, NR=NR, FSH=0.5,
-                 DIFF=0.90, FWIND=0.5, TF=2*YEAR, GEOMETRY="LOGARITHMIC", INTERP="LOGARITHMIC", TOL=5e-3)
+                 DIFF=0.995, FWIND=0.5, TF=2*YEAR, GEOMETRY="LOGARITHMIC", INTERP="LOGARITHMIC", TOL=5e-3)
 
 diff_ps = [diff_p1, diff_p2, diff_p3]
 diff_ic = [main_p0, main_p0, main_p0]
@@ -73,7 +73,7 @@ for (p, ic) in zip(diff_ps, diff_ic):
     ics = []
     if ic is None:
         print("Generating initial conditions")
-        ic = InitialCondition(m0=0.01, tv=0.015, ambf=1e-3, params=p, tf=14*DAY)
+        ic = InitialCondition(m0=0.01, tv=0.03, ambf=1e-3, params=p, tf=2*MONTH)
     else:
         ic = InitialCondition(load_from=ic.SIM_DIR+"/ics")
     sim = Simulation(sigma0=ic.sigma0, entropy0=ic.entropy0, params=p)

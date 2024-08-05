@@ -6,7 +6,8 @@ from variable import *
 
 ## Initial conditions are a surface density and an entropy per unit mass
 class Simulation:
-    def __init__(self, sigma0, entropy0, params=Params()):
+    def __init__(self, sigma0, entropy0, params=Params(), verbose=True):
+        self.verbose = verbose
         ## sets up simulation directory
         if not os.path.isdir(os.path.join(os.getcwd(), params.SIM_DIR)):
             os.makedirs(os.path.join(os.getcwd(), params.SIM_DIR))
@@ -178,9 +179,10 @@ class Simulation:
 
             ## loop breaking conditions
 
-            print(
-                f"\rpct: {(self.t / self.params.TF * 100):2.2f}%\tdt={dt / (self.params.TF - self.t0):2.2e}\t{st}\tloc={loc:2.2f}"
-                + f"\tsig {sig_err:2.2e}\tts {ts_err:2.2e}\t\t\t\t\t", end="")
+            if self.verbose:
+                print(
+                    f"\rpct: {(self.t / self.params.TF * 100):2.2f}%\tdt={dt / (self.params.TF - self.t0):2.2e}\t{st}\tloc={loc:2.2f}"
+                    + f"\tsig {sig_err:2.2e}\tts {ts_err:2.2e}\t\t\t\t\t", end="")
             if np.isnan(dt) or np.any(self.var0.ts<0): break
             if self.t > self.params.TF: break
 
